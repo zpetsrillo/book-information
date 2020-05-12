@@ -1,20 +1,6 @@
-const xlsx = require("xlsx");
 const puppeteer = require("puppeteer");
-
-// const wb = xlsx.readFile("books.xls", { cellDates: true });
-// const ws = wb.Sheets["Purchases"];
-
-// const data = xlsx.utils.sheet_to_json(ws);
-
-// for (let row of data) {
-//   let isbn = row["Pub #"];
-
-//   let isbns = [];
-//   if (isbn && isbn.length >= 10) {
-//     isbn = isbn.replace(/-/g, ``);
-//     isbns.push(isbn);
-//   }
-// }
+const fs = require("fs");
+const json2xls = require("json2xls");
 
 const escapeXpathString = (str) => {
   const splitedQuotes = str.replace(/'/g, `', "'", '`);
@@ -131,7 +117,7 @@ const getBookByIsbn = async (page, isbn) => {
   const title = await getTextFromXPath(page, '//*[@id="productTitle"]');
   const price = await getTextFromXPath(
     page,
-    '//*[@id="buyNewSection"]/h5/div/div[2]/div/span[2]'
+    '//*[@id="buyNewSection"]/a/h5/div/div[2]/div/span[2]'
   );
 
   let author = await getTextFromXPath(page, '//*[@id="bylineInfo"]/span');
@@ -139,7 +125,7 @@ const getBookByIsbn = async (page, isbn) => {
   try {
     author = author.replace(/(\{.*\})/g, "");
     author = author.trim();
-    author = /((\w|\s)+.*\(\w+\))/g.exec(author)[1];
+    author = /((\w|\s|\.)+.*\(\w+\))/g.exec(author)[1];
     author = author.replace(/(\n|\t)/g, "");
     author = author.replace(/\s\s+/g, " ");
   } catch (error) {
@@ -157,6 +143,8 @@ const getBookByIsbn = async (page, isbn) => {
 };
 
 const getDataFromAmazon = async (isbns) => {
+  let output = [];
+
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
 
@@ -175,7 +163,7 @@ const getDataFromAmazon = async (isbns) => {
       productDimensions,
       shippingWeight,
     } = getDataFromProductDetails(productDetails);
-    console.log({
+    output.push({
       title,
       price,
       author,
@@ -190,6 +178,22 @@ const getDataFromAmazon = async (isbns) => {
   }
 
   await browser.close();
+
+  return output;
 };
 
-getDataFromAmazon(["9780593128404", "9781591847786", "9781683642947"]);
+let filename = "output.xlsx";
+const run = async (isbns) => {
+  const output = await getDataFromAmazon(isbns);
+
+  const xls = json2xls(output);
+  fs.writeFileSync(filename, xls, "binary", (err) => {
+    if (err) {
+      console.log("writeFileSync :", err);
+    }
+  });
+  console.log(filename + " file is saved!");
+};
+
+const isbns = ["9780060731335"];
+run(isbns);
